@@ -1,0 +1,271 @@
+package handlers
+
+import (
+	customMiddleware "blog-api/internal/middleware"
+	"blog-api/internal/repository"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"strconv"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-playground/validator/v10"
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
+var validate = validator.New()
+
+// PostHandler agrupa as dependências que os handlers de posts precisam.
+type PostHandler struct {
+	Queries *repository.Queries
+}
+
+func NewPostHandler(queries *repository.Queries) *PostHandler {
+	return &PostHandler{Queries: queries}
+}
+
+type CreatePostRequest struct {
+	Title         string `json:"title" validate:"required,min=3,max=255"`
+	Slug          string `json:"slug" validate:"required,min=3,max=255"`
+	Content       string `json:"content" validate:"required"`
+	Excerpt       string `json:"excerpt" validate:"max=500"`
+	CoverImageURL string `json:"cover_image_url" validate:"omitempty,url"`
+}
+
+type UpdatePostRequest struct {
+	Title         string `json:"title" validate:"required,min=3,max=255"`
+	Content       string `json:"content" validate:"required"`
+	Excerpt       string `json:"excerpt" validate:"max=500"`
+	CoverImageURL string `json:"cover_image_url" validate:"omitempty,url"`
+}
+
+// ListPosts responde GET /api/posts (público, só published)
+func (h *PostHandler) ListPosts(w http.ResponseWriter, r *http.Request) {
+	limit, offset := parsePagination(r)
+	posts, err := h.Queries.ListPublishedPosts(r.Context(), repository.ListPublishedPostsParams{
+		Limit: limit, Offset: offset,
+	})
+	if err != nil {
+		http.Error(w, "erro ao buscar posts", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(posts)
+}
+
+// ListAllPosts responde GET /api/admin/posts (admin, todos os status)
+func (h *PostHandler) ListAllPosts(w http.ResponseWriter, r *http.Request) {
+	limit, offset := parsePagination(r)
+	posts, err := h.Queries.ListAllPosts(r.Context(), repository.ListAllPostsParams{
+		Limit: limit, Offset: offset,
+	})
+	if err != nil {
+		http.Error(w, "erro ao buscar posts", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(posts)
+}
+
+// PublishPost responde PATCH /api/admin/posts/:id/publish
+func (h *PostHandler) PublishPost(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "id inválido", http.StatusBadRequest)
+		return
+	}
+	_, err = h.Queries.GetPostByID(r.Context(), int32(id))
+	if err != nil {
+		http.Error(w, "post não encontrado", http.StatusNotFound)
+		return
+	}
+	publishedPost, err := h.Queries.PublishPost(r.Context(), int32(id))
+	if err != nil {
+		http.Error(w, "erro ao publicar post", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(publishedPost)
+}
+
+func parsePagination(r *http.Request) (limit, offset int32) {
+	limit = 10
+	offset = 0
+
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			limit = int32(parsed)
+		}
+	}
+
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed >= 0 {
+			offset = int32(parsed)
+		}
+	}
+
+	return limit, offset
+}
+
+// SearchPostBySlug responde GET /api/posts/:slug
+func (h *PostHandler) SearchPostBySlug(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	post, err := h.Queries.GetPostBySlug(r.Context(), slug)
+	if err != nil {
+		http.Error(w, "erro ao buscar post", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(post)
+}
+
+// SearchPostById responde GET /api/posts/:id
+func (h *PostHandler) SearchPostById(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "id inválido", http.StatusBadRequest)
+		return
+	}
+	post, err := h.Queries.GetPostByID(r.Context(), int32(id))
+	if err != nil {
+		http.Error(w, "erro ao buscar post", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(post)
+}
+
+// CreatePost responde POST /api/admin/posts
+func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
+	var req CreatePostRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "corpo da requisição inválido", http.StatusBadRequest)
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		http.Error(w, formatValidationError(err), http.StatusBadRequest)
+		return
+	}
+
+	userID := r.Context().Value(customMiddleware.UserIDKey).(int32)
+
+	post, err := h.Queries.CreatePost(r.Context(), repository.CreatePostParams{
+		Title:         req.Title,
+		Slug:          req.Slug,
+		Content:       req.Content,
+		Excerpt:       pgtype.Text{String: req.Excerpt, Valid: req.Excerpt != ""},
+		CoverImageUrl: pgtype.Text{String: req.CoverImageURL, Valid: req.CoverImageURL != ""},
+		Status:        "draft",
+		AuthorID:      userID,
+	})
+
+	if err != nil {
+		http.Error(w, "erro ao criar post", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(post)
+}
+
+// EditPost responde PUT /api/admin/posts/:id
+func (h *PostHandler) EditPost(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "id inválido", http.StatusBadRequest)
+		return
+	}
+
+	post, err := h.Queries.GetPostByID(r.Context(), int32(id))
+	if err != nil {
+		http.Error(w, "post não encontrado", http.StatusNotFound)
+		return
+	}
+
+	userID := r.Context().Value(customMiddleware.UserIDKey).(int32)
+	if userID != post.AuthorID {
+		http.Error(w, "voce nao pode editar post que nao te pertencem", http.StatusUnauthorized)
+		return
+	}
+
+	var req UpdatePostRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "corpo da requisição inválido", http.StatusBadRequest)
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		http.Error(w, formatValidationError(err), http.StatusBadRequest)
+		return
+	}
+
+	updatedPost, err := h.Queries.UpdatePost(r.Context(), repository.UpdatePostParams{
+		ID:            int32(id),
+		Title:         req.Title,
+		Content:       req.Content,
+		Excerpt:       pgtype.Text{String: req.Excerpt, Valid: req.Excerpt != ""},
+		CoverImageUrl: pgtype.Text{String: req.CoverImageURL, Valid: req.CoverImageURL != ""},
+	})
+	if err != nil {
+		http.Error(w, "erro ao atualizar post", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(updatedPost)
+}
+
+// DeletePost responde DELETE /api/admin/posts/:id
+func (h *PostHandler) DeletePost(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "id inválido", http.StatusBadRequest)
+		return
+	}
+
+	post, err := h.Queries.GetPostByID(r.Context(), int32(id))
+	if err != nil {
+		http.Error(w, "post não encontrado", http.StatusNotFound)
+		return
+	}
+
+	userID := r.Context().Value(customMiddleware.UserIDKey).(int32)
+	if userID != post.AuthorID {
+		http.Error(w, "voce nao pode excluir posts que nao te pertencem", http.StatusUnauthorized)
+		return
+	}
+
+	err = h.Queries.DeletePost(r.Context(), int32(id))
+	if err != nil {
+		http.Error(w, "Erro ao deletar post", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func formatValidationError(err error) string {
+	var validationErrors validator.ValidationErrors
+	if errors.As(err, &validationErrors) {
+		fieldErr := validationErrors[0]
+		return fmt.Sprintf("campo '%s' é inválido: falhou na regra '%s'", fieldErr.Field(), fieldErr.Tag())
+	}
+	return "dados inválidos"
+}
