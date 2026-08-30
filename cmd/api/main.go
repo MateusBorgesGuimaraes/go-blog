@@ -43,6 +43,7 @@ func main() {
 	postHandler := handlers.NewPostHandler(queries)
 	tagHandler := handlers.NewTagHandler(queries)
 	commentHandler := handlers.NewCommentHandler(queries)
+	feedHandler := handlers.NewFeedHandler(queries, cfg.BaseURL)
 
 	r := chi.NewRouter()
 
@@ -60,6 +61,7 @@ func main() {
 	r.Get("/health", handlers.HealthCheck)
 
 	r.Route("/api", func(r chi.Router) {
+		r.Get("/feed.xml", feedHandler.ServeFeed)
 		r.Post("/auth/register", userHandler.CreateUser)
 		r.Post("/auth/login", authHandler.Login)
 		r.Get("/posts", postHandler.ListPosts)
