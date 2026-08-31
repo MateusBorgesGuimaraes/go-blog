@@ -44,6 +44,7 @@ func main() {
 	tagHandler := handlers.NewTagHandler(queries)
 	commentHandler := handlers.NewCommentHandler(queries)
 	feedHandler := handlers.NewFeedHandler(queries, cfg.BaseURL)
+	uploadHandler := handlers.NewUploadHandler(cfg.BaseURL)
 
 	r := chi.NewRouter()
 
@@ -57,6 +58,10 @@ func main() {
 		AllowCredentials: true,
 	}))
 
+	// Serve os arquivos estáticos de /uploads
+	fileServer := http.FileServer(http.Dir("./uploads"))
+	r.Handle("/uploads/*", http.StripPrefix("/uploads/", fileServer))
+
 	// Rotas
 	r.Get("/health", handlers.HealthCheck)
 
@@ -66,6 +71,7 @@ func main() {
 		r.Post("/auth/login", authHandler.Login)
 		r.Get("/posts", postHandler.ListPosts)
 		r.Get("/posts/{slug}", postHandler.SearchPostBySlug)
+		r.Get("/posts/{id}", postHandler.SearchPostById)
 		r.Get("/tags", tagHandler.ListTags)
 		r.Get("/tags/{slug}", tagHandler.GetTagBySlug)
 		r.Get("/posts/{id}/tags", tagHandler.ListTagsByPostID)
@@ -77,7 +83,6 @@ func main() {
 			r.Get("/users", userHandler.SearchUserByEmail)
 			r.Get("/users/{id}", userHandler.SearchUserByID)
 			r.Get("/posts", postHandler.ListAllPosts)
-			r.Get("/posts/{id}", postHandler.SearchPostById)
 			r.Post("/posts", postHandler.CreatePost)
 			r.Put("/posts/{id}", postHandler.EditPost)
 			r.Patch("/posts/{id}/publish", postHandler.PublishPost)
@@ -88,6 +93,7 @@ func main() {
 			r.Delete("/posts/{id}/tags/{tagId}", tagHandler.RemoveTagFromPost)
 			r.Patch("/comments/{id}/approve", commentHandler.ApproveComment)
 			r.Delete("/comments/{id}", commentHandler.DeleteComment)
+			r.Post("/uploads", uploadHandler.UploadImage)
 		})
 	})
 

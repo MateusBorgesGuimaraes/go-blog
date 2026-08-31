@@ -18,15 +18,15 @@ type Querier interface {
 	DeleteComment(ctx context.Context, id int32) error
 	DeletePost(ctx context.Context, id int32) error
 	DeleteTag(ctx context.Context, id int32) error
-	GetPostByID(ctx context.Context, id int32) (Post, error)
-	GetPostBySlug(ctx context.Context, slug string) (Post, error)
+	GetPostByID(ctx context.Context, id int32) (GetPostByIDRow, error)
+	GetPostBySlug(ctx context.Context, slug string) (GetPostBySlugRow, error)
 	GetTagBySlug(ctx context.Context, slug string) (Tag, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id int32) (User, error)
 	ListAllCommentsByPostID(ctx context.Context, postID int32) ([]Comment, error)
-	ListAllPosts(ctx context.Context, arg ListAllPostsParams) ([]Post, error)
+	ListAllPosts(ctx context.Context, arg ListAllPostsParams) ([]ListAllPostsRow, error)
 	ListApprovedCommentsByPostID(ctx context.Context, postID int32) ([]Comment, error)
-	ListPublishedPosts(ctx context.Context, arg ListPublishedPostsParams) ([]Post, error)
+	ListPublishedPosts(ctx context.Context, arg ListPublishedPostsParams) ([]ListPublishedPostsRow, error)
 	ListTags(ctx context.Context) ([]Tag, error)
 	ListTagsByPostID(ctx context.Context, postID int32) ([]Tag, error)
 	PublishPost(ctx context.Context, id int32) (Post, error)

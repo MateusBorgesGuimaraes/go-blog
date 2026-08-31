@@ -65,14 +65,33 @@ func (q *Queries) DeletePost(ctx context.Context, id int32) error {
 }
 
 const getPostByID = `-- name: GetPostByID :one
-SELECT id, title, slug, content, excerpt, cover_image_url, status, author_id, published_at, created_at, updated_at
-FROM posts
-WHERE id = $1
+SELECT
+    p.id, p.title, p.slug, p.content, p.excerpt, p.cover_image_url,
+    p.status, p.author_id, p.published_at, p.created_at, p.updated_at,
+    u.name AS author_name
+FROM posts p
+INNER JOIN users u ON u.id = p.author_id
+WHERE p.id = $1
 `
 
-func (q *Queries) GetPostByID(ctx context.Context, id int32) (Post, error) {
+type GetPostByIDRow struct {
+	ID            int32              `json:"id"`
+	Title         string             `json:"title"`
+	Slug          string             `json:"slug"`
+	Content       string             `json:"content"`
+	Excerpt       pgtype.Text        `json:"excerpt"`
+	CoverImageUrl pgtype.Text        `json:"cover_image_url"`
+	Status        string             `json:"status"`
+	AuthorID      int32              `json:"author_id"`
+	PublishedAt   pgtype.Timestamptz `json:"published_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	AuthorName    string             `json:"author_name"`
+}
+
+func (q *Queries) GetPostByID(ctx context.Context, id int32) (GetPostByIDRow, error) {
 	row := q.db.QueryRow(ctx, getPostByID, id)
-	var i Post
+	var i GetPostByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
@@ -85,19 +104,39 @@ func (q *Queries) GetPostByID(ctx context.Context, id int32) (Post, error) {
 		&i.PublishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AuthorName,
 	)
 	return i, err
 }
 
 const getPostBySlug = `-- name: GetPostBySlug :one
-SELECT id, title, slug, content, excerpt, cover_image_url, status, author_id, published_at, created_at, updated_at
-FROM posts
-WHERE slug = $1
+SELECT
+    p.id, p.title, p.slug, p.content, p.excerpt, p.cover_image_url,
+    p.status, p.author_id, p.published_at, p.created_at, p.updated_at,
+    u.name AS author_name
+FROM posts p
+INNER JOIN users u ON u.id = p.author_id
+WHERE p.slug = $1
 `
 
-func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (Post, error) {
+type GetPostBySlugRow struct {
+	ID            int32              `json:"id"`
+	Title         string             `json:"title"`
+	Slug          string             `json:"slug"`
+	Content       string             `json:"content"`
+	Excerpt       pgtype.Text        `json:"excerpt"`
+	CoverImageUrl pgtype.Text        `json:"cover_image_url"`
+	Status        string             `json:"status"`
+	AuthorID      int32              `json:"author_id"`
+	PublishedAt   pgtype.Timestamptz `json:"published_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	AuthorName    string             `json:"author_name"`
+}
+
+func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (GetPostBySlugRow, error) {
 	row := q.db.QueryRow(ctx, getPostBySlug, slug)
-	var i Post
+	var i GetPostBySlugRow
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
@@ -110,12 +149,13 @@ func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (Post, error) 
 		&i.PublishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AuthorName,
 	)
 	return i, err
 }
 
 const listAllPosts = `-- name: ListAllPosts :many
-SELECT id, title, slug, content, excerpt, cover_image_url, status, author_id, published_at, created_at, updated_at
+SELECT id, title, slug, excerpt, cover_image_url, status, author_id, published_at, created_at, updated_at
 FROM posts
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
@@ -126,20 +166,32 @@ type ListAllPostsParams struct {
 	Offset int32 `json:"offset"`
 }
 
-func (q *Queries) ListAllPosts(ctx context.Context, arg ListAllPostsParams) ([]Post, error) {
+type ListAllPostsRow struct {
+	ID            int32              `json:"id"`
+	Title         string             `json:"title"`
+	Slug          string             `json:"slug"`
+	Excerpt       pgtype.Text        `json:"excerpt"`
+	CoverImageUrl pgtype.Text        `json:"cover_image_url"`
+	Status        string             `json:"status"`
+	AuthorID      int32              `json:"author_id"`
+	PublishedAt   pgtype.Timestamptz `json:"published_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListAllPosts(ctx context.Context, arg ListAllPostsParams) ([]ListAllPostsRow, error) {
 	rows, err := q.db.Query(ctx, listAllPosts, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Post
+	var items []ListAllPostsRow
 	for rows.Next() {
-		var i Post
+		var i ListAllPostsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
 			&i.Slug,
-			&i.Content,
 			&i.Excerpt,
 			&i.CoverImageUrl,
 			&i.Status,
@@ -159,7 +211,7 @@ func (q *Queries) ListAllPosts(ctx context.Context, arg ListAllPostsParams) ([]P
 }
 
 const listPublishedPosts = `-- name: ListPublishedPosts :many
-SELECT id, title, slug, content, excerpt, cover_image_url, status, author_id, published_at, created_at, updated_at
+SELECT id, title, slug, excerpt, cover_image_url, status, author_id, published_at, created_at, updated_at
 FROM posts
 WHERE status = 'published'
 ORDER BY published_at DESC
@@ -171,20 +223,32 @@ type ListPublishedPostsParams struct {
 	Offset int32 `json:"offset"`
 }
 
-func (q *Queries) ListPublishedPosts(ctx context.Context, arg ListPublishedPostsParams) ([]Post, error) {
+type ListPublishedPostsRow struct {
+	ID            int32              `json:"id"`
+	Title         string             `json:"title"`
+	Slug          string             `json:"slug"`
+	Excerpt       pgtype.Text        `json:"excerpt"`
+	CoverImageUrl pgtype.Text        `json:"cover_image_url"`
+	Status        string             `json:"status"`
+	AuthorID      int32              `json:"author_id"`
+	PublishedAt   pgtype.Timestamptz `json:"published_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListPublishedPosts(ctx context.Context, arg ListPublishedPostsParams) ([]ListPublishedPostsRow, error) {
 	rows, err := q.db.Query(ctx, listPublishedPosts, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Post
+	var items []ListPublishedPostsRow
 	for rows.Next() {
-		var i Post
+		var i ListPublishedPostsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
 			&i.Slug,
-			&i.Content,
 			&i.Excerpt,
 			&i.CoverImageUrl,
 			&i.Status,

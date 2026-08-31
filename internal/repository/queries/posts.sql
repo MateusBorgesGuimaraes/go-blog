@@ -1,25 +1,33 @@
 -- name: ListPublishedPosts :many
-SELECT id, title, slug, content, excerpt, cover_image_url, status, author_id, published_at, created_at, updated_at
+SELECT id, title, slug, excerpt, cover_image_url, status, author_id, published_at, created_at, updated_at
 FROM posts
 WHERE status = 'published'
 ORDER BY published_at DESC
 LIMIT $1 OFFSET $2;
 
 -- name: GetPostBySlug :one
-SELECT id, title, slug, content, excerpt, cover_image_url, status, author_id, published_at, created_at, updated_at
-FROM posts
-WHERE slug = $1;
+SELECT
+    p.id, p.title, p.slug, p.content, p.excerpt, p.cover_image_url,
+    p.status, p.author_id, p.published_at, p.created_at, p.updated_at,
+    u.name AS author_name
+FROM posts p
+INNER JOIN users u ON u.id = p.author_id
+WHERE p.slug = $1;
 
 -- name: ListAllPosts :many
-SELECT id, title, slug, content, excerpt, cover_image_url, status, author_id, published_at, created_at, updated_at
+SELECT id, title, slug, excerpt, cover_image_url, status, author_id, published_at, created_at, updated_at
 FROM posts
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;
 
 -- name: GetPostByID :one
-SELECT id, title, slug, content, excerpt, cover_image_url, status, author_id, published_at, created_at, updated_at
-FROM posts
-WHERE id = $1;
+SELECT
+    p.id, p.title, p.slug, p.content, p.excerpt, p.cover_image_url,
+    p.status, p.author_id, p.published_at, p.created_at, p.updated_at,
+    u.name AS author_name
+FROM posts p
+INNER JOIN users u ON u.id = p.author_id
+WHERE p.id = $1;
 
 -- name: CreatePost :one
 INSERT INTO posts (title, slug, content, excerpt, cover_image_url, status, author_id)
