@@ -25,7 +25,8 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	Token string `json:"token"`
+	Token string       `json:"token"`
+	User  UserResponse `json:"user"`
 }
 
 // Login responde POST /api/auth/login que verifica email/senha e retorna um token JWT assinado
@@ -60,7 +61,15 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(LoginResponse{Token: token})
+	json.NewEncoder(w).Encode(LoginResponse{
+		Token: token,
+		User: UserResponse{
+			ID:    user.ID,
+			Name:  user.Name,
+			Email: user.Email,
+			Role:  user.Role,
+		},
+	})
 }
 
 func generateToken(userID int32, secret string) (string, error) {
