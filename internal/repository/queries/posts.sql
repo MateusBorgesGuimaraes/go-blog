@@ -20,6 +20,13 @@ FROM posts
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;
 
+-- name: ListAllPostsByAuthor :many
+SELECT id, title, slug, excerpt, cover_image_url, status, author_id, published_at, created_at, updated_at
+FROM posts
+WHERE author_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
 -- name: GetPostByID :one
 SELECT
     p.id, p.title, p.slug, p.content, p.excerpt, p.cover_image_url,

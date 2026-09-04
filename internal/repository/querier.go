@@ -25,10 +25,12 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id int32) (User, error)
 	ListAllCommentsByPostID(ctx context.Context, postID int32) ([]Comment, error)
 	ListAllPosts(ctx context.Context, arg ListAllPostsParams) ([]ListAllPostsRow, error)
+	ListAllPostsByAuthor(ctx context.Context, arg ListAllPostsByAuthorParams) ([]ListAllPostsByAuthorRow, error)
 	ListApprovedCommentsByPostID(ctx context.Context, postID int32) ([]Comment, error)
 	ListPublishedPosts(ctx context.Context, arg ListPublishedPostsParams) ([]ListPublishedPostsRow, error)
 	ListTags(ctx context.Context) ([]Tag, error)
 	ListTagsByPostID(ctx context.Context, postID int32) ([]Tag, error)
+	ListTagsByPostIDs(ctx context.Context, dollar_1 []int32) ([]ListTagsByPostIDsRow, error)
 	PublishPost(ctx context.Context, id int32) (Post, error)
 	RemoveTagFromPost(ctx context.Context, arg RemoveTagFromPostParams) error
 	UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error)

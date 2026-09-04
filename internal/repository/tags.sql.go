@@ -119,6 +119,45 @@ func (q *Queries) ListTagsByPostID(ctx context.Context, postID int32) ([]Tag, er
 	return items, nil
 }
 
+const listTagsByPostIDs = `-- name: ListTagsByPostIDs :many
+SELECT pt.post_id, t.id, t.name, t.slug
+FROM tags t
+INNER JOIN post_tags pt ON pt.tag_id = t.id
+WHERE pt.post_id = ANY($1::int[])
+`
+
+type ListTagsByPostIDsRow struct {
+	PostID int32  `json:"post_id"`
+	ID     int32  `json:"id"`
+	Name   string `json:"name"`
+	Slug   string `json:"slug"`
+}
+
+func (q *Queries) ListTagsByPostIDs(ctx context.Context, dollar_1 []int32) ([]ListTagsByPostIDsRow, error) {
+	rows, err := q.db.Query(ctx, listTagsByPostIDs, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTagsByPostIDsRow
+	for rows.Next() {
+		var i ListTagsByPostIDsRow
+		if err := rows.Scan(
+			&i.PostID,
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const removeTagFromPost = `-- name: RemoveTagFromPost :exec
 DELETE FROM post_tags
 WHERE post_id = $1 AND tag_id = $2

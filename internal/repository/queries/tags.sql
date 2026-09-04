@@ -31,3 +31,9 @@ SELECT t.id, t.name, t.slug
 FROM tags t
 INNER JOIN post_tags pt ON pt.tag_id = t.id
 WHERE pt.post_id = $1;
+
+-- name: ListTagsByPostIDs :many
+SELECT pt.post_id, t.id, t.name, t.slug
+FROM tags t
+INNER JOIN post_tags pt ON pt.tag_id = t.id
+WHERE pt.post_id = ANY($1::int[]);

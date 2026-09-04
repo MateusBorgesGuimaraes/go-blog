@@ -210,6 +210,64 @@ func (q *Queries) ListAllPosts(ctx context.Context, arg ListAllPostsParams) ([]L
 	return items, nil
 }
 
+const listAllPostsByAuthor = `-- name: ListAllPostsByAuthor :many
+SELECT id, title, slug, excerpt, cover_image_url, status, author_id, published_at, created_at, updated_at
+FROM posts
+WHERE author_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListAllPostsByAuthorParams struct {
+	AuthorID int32 `json:"author_id"`
+	Limit    int32 `json:"limit"`
+	Offset   int32 `json:"offset"`
+}
+
+type ListAllPostsByAuthorRow struct {
+	ID            int32              `json:"id"`
+	Title         string             `json:"title"`
+	Slug          string             `json:"slug"`
+	Excerpt       pgtype.Text        `json:"excerpt"`
+	CoverImageUrl pgtype.Text        `json:"cover_image_url"`
+	Status        string             `json:"status"`
+	AuthorID      int32              `json:"author_id"`
+	PublishedAt   pgtype.Timestamptz `json:"published_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListAllPostsByAuthor(ctx context.Context, arg ListAllPostsByAuthorParams) ([]ListAllPostsByAuthorRow, error) {
+	rows, err := q.db.Query(ctx, listAllPostsByAuthor, arg.AuthorID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAllPostsByAuthorRow
+	for rows.Next() {
+		var i ListAllPostsByAuthorRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Slug,
+			&i.Excerpt,
+			&i.CoverImageUrl,
+			&i.Status,
+			&i.AuthorID,
+			&i.PublishedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPublishedPosts = `-- name: ListPublishedPosts :many
 SELECT id, title, slug, excerpt, cover_image_url, status, author_id, published_at, created_at, updated_at
 FROM posts

@@ -50,9 +50,43 @@ func (h *PostHandler) ListPosts(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "erro ao buscar posts", http.StatusInternalServerError)
 		return
 	}
+
+	// Coleta os IDs pra buscar as tags de todos de uma vez
+	ids := make([]int32, len(posts))
+	for i, p := range posts {
+		ids[i] = p.ID
+	}
+
+	tagRows, err := h.Queries.ListTagsByPostIDs(r.Context(), ids)
+	if err != nil {
+		http.Error(w, "erro ao buscar tags dos posts", http.StatusInternalServerError)
+		return
+	}
+
+	tagsByPost := make(map[int32][]repository.Tag)
+	for _, row := range tagRows {
+		tagsByPost[row.PostID] = append(tagsByPost[row.PostID], repository.Tag{
+			ID: row.ID, Name: row.Name, Slug: row.Slug,
+		})
+	}
+
+	// Monta a resposta final combinando post + suas tags
+	response := make([]PostWithTags, len(posts))
+	for i, p := range posts {
+		response[i] = PostWithTags{
+			ListPublishedPostsRow: p,
+			Tags:                  tagsByPost[p.ID], // nil se não tiver tags — vira [] no JSON
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(posts)
+	json.NewEncoder(w).Encode(response)
+}
+
+type PostWithTags struct {
+	repository.ListPublishedPostsRow
+	Tags []repository.Tag `json:"tags"`
 }
 
 // ListAllPosts responde GET /api/admin/posts (admin, todos os status)
@@ -65,9 +99,93 @@ func (h *PostHandler) ListAllPosts(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "erro ao buscar posts", http.StatusInternalServerError)
 		return
 	}
+
+	ids := make([]int32, len(posts))
+	for i, p := range posts {
+		ids[i] = p.ID
+	}
+
+	tagRows, err := h.Queries.ListTagsByPostIDs(r.Context(), ids)
+	if err != nil {
+		http.Error(w, "erro ao buscar tags dos posts", http.StatusInternalServerError)
+		return
+	}
+
+	tagsByPost := make(map[int32][]repository.Tag)
+	for _, row := range tagRows {
+		tagsByPost[row.PostID] = append(tagsByPost[row.PostID], repository.Tag{
+			ID: row.ID, Name: row.Name, Slug: row.Slug,
+		})
+	}
+
+	response := make([]PostWithAllTags, len(posts))
+	for i, p := range posts {
+		response[i] = PostWithAllTags{
+			ListAllPostsRow: p,
+			Tags:            tagsByPost[p.ID],
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(posts)
+	json.NewEncoder(w).Encode(response)
+}
+
+type PostWithAllTags struct {
+	repository.ListAllPostsRow
+	Tags []repository.Tag `json:"tags"`
+}
+
+// ListAllAuthorPosts responde GET /api/admin/posts/author (admin, todos os status)
+func (h *PostHandler) ListAllAuthorPosts(w http.ResponseWriter, r *http.Request) {
+	limit, offset := parsePagination(r)
+
+	userID := r.Context().Value(customMiddleware.UserIDKey).(int32)
+
+	posts, err := h.Queries.ListAllPostsByAuthor(r.Context(), repository.ListAllPostsByAuthorParams{
+		AuthorID: userID,
+		Limit:    limit,
+		Offset:   offset,
+	})
+	if err != nil {
+		http.Error(w, "erro ao buscar posts", http.StatusInternalServerError)
+		return
+	}
+
+	ids := make([]int32, len(posts))
+	for i, p := range posts {
+		ids[i] = p.ID
+	}
+
+	tagRows, err := h.Queries.ListTagsByPostIDs(r.Context(), ids)
+	if err != nil {
+		http.Error(w, "erro ao buscar tags dos posts", http.StatusInternalServerError)
+		return
+	}
+
+	tagsByPost := make(map[int32][]repository.Tag)
+	for _, row := range tagRows {
+		tagsByPost[row.PostID] = append(tagsByPost[row.PostID], repository.Tag{
+			ID: row.ID, Name: row.Name, Slug: row.Slug,
+		})
+	}
+
+	response := make([]PostWithAuthorTags, len(posts))
+	for i, p := range posts {
+		response[i] = PostWithAuthorTags{
+			ListAllPostsByAuthorRow: p,
+			Tags:                    tagsByPost[p.ID],
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
+type PostWithAuthorTags struct {
+	repository.ListAllPostsByAuthorRow
+	Tags []repository.Tag `json:"tags"`
 }
 
 // PublishPost responde PATCH /api/admin/posts/:id/publish
@@ -117,16 +235,30 @@ func (h *PostHandler) SearchPostBySlug(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	post, err := h.Queries.GetPostBySlug(r.Context(), slug)
 	if err != nil {
-		http.Error(w, "erro ao buscar post", http.StatusNotFound)
+		http.Error(w, "post não encontrado", http.StatusNotFound)
 		return
+	}
+
+	tags, err := h.Queries.ListTagsByPostID(r.Context(), post.ID)
+	if err != nil {
+		http.Error(w, "erro ao buscar tags do post", http.StatusInternalServerError)
+		return
+	}
+
+	response := struct {
+		repository.GetPostBySlugRow
+		Tags []repository.Tag `json:"tags"`
+	}{
+		GetPostBySlugRow: post,
+		Tags:              tags,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(post)
+	json.NewEncoder(w).Encode(response)
 }
 
-// SearchPostById responde GET /api/posts/:id
+// SearchPostById responde GET /api/posts/id/:id
 func (h *PostHandler) SearchPostById(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 
@@ -141,9 +273,23 @@ func (h *PostHandler) SearchPostById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tags, err := h.Queries.ListTagsByPostID(r.Context(), post.ID)
+	if err != nil {
+		http.Error(w, "erro ao buscar tags do post", http.StatusInternalServerError)
+		return
+	}
+
+	response := struct {
+		repository.GetPostByIDRow
+		Tags []repository.Tag `json:"tags"`
+	}{
+		GetPostByIDRow: post,
+		Tags:              tags,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(post)
+	json.NewEncoder(w).Encode(response)
 }
 
 // CreatePost responde POST /api/admin/posts
