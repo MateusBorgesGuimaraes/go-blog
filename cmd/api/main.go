@@ -44,7 +44,7 @@ func main() {
 	tagHandler := handlers.NewTagHandler(queries)
 	commentHandler := handlers.NewCommentHandler(queries)
 	feedHandler := handlers.NewFeedHandler(queries, cfg.BaseURL)
-	uploadHandler := handlers.NewUploadHandler(cfg.BaseURL)
+	uploadHandler := handlers.NewUploadHandler(cfg.ImageServerBaseUrl)
 
 	r := chi.NewRouter()
 

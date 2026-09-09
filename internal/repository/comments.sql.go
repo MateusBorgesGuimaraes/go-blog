@@ -7,6 +7,8 @@ package repository
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const approveComment = `-- name: ApproveComment :one
@@ -64,6 +66,39 @@ WHERE id = $1
 func (q *Queries) DeleteComment(ctx context.Context, id int32) error {
 	_, err := q.db.Exec(ctx, deleteComment, id)
 	return err
+}
+
+const getCommentWithPostAuthor = `-- name: GetCommentWithPostAuthor :one
+SELECT c.id, c.post_id, c.author_name, c.content, c.status, c.created_at,
+       p.author_id AS post_author_id
+FROM comments c
+INNER JOIN posts p ON p.id = c.post_id
+WHERE c.id = $1
+`
+
+type GetCommentWithPostAuthorRow struct {
+	ID           int32              `json:"id"`
+	PostID       int32              `json:"post_id"`
+	AuthorName   string             `json:"author_name"`
+	Content      string             `json:"content"`
+	Status       string             `json:"status"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	PostAuthorID int32              `json:"post_author_id"`
+}
+
+func (q *Queries) GetCommentWithPostAuthor(ctx context.Context, id int32) (GetCommentWithPostAuthorRow, error) {
+	row := q.db.QueryRow(ctx, getCommentWithPostAuthor, id)
+	var i GetCommentWithPostAuthorRow
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.AuthorName,
+		&i.Content,
+		&i.Status,
+		&i.CreatedAt,
+		&i.PostAuthorID,
+	)
+	return i, err
 }
 
 const listAllCommentsByPostID = `-- name: ListAllCommentsByPostID :many

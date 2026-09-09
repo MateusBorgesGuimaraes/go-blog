@@ -18,6 +18,7 @@ type Querier interface {
 	DeleteComment(ctx context.Context, id int32) error
 	DeletePost(ctx context.Context, id int32) error
 	DeleteTag(ctx context.Context, id int32) error
+	GetCommentWithPostAuthor(ctx context.Context, id int32) (GetCommentWithPostAuthorRow, error)
 	GetPostByID(ctx context.Context, id int32) (GetPostByIDRow, error)
 	GetPostBySlug(ctx context.Context, slug string) (GetPostBySlugRow, error)
 	GetTagBySlug(ctx context.Context, slug string) (Tag, error)

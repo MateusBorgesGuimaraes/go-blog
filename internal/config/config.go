@@ -7,6 +7,7 @@ type Config struct {
 	DatabaseURL string
 	JWTSecret   string
 	BaseURL     string
+	ImageServerBaseUrl string
 }
 
 func Load() *Config {
@@ -15,6 +16,7 @@ func Load() *Config {
 		DatabaseURL: getEnv("DATABASE_URL", ""),
 		JWTSecret:   getEnv("JWT_SECRET", ""),
 		BaseURL:     getEnv("BASE_URL", "http://localhost:5173"),
+		ImageServerBaseUrl:  getEnv("IMAGE_SERVER_BASE_URL", "http://localhost:8080"),
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	customMiddleware "blog-api/internal/middleware"
 	"blog-api/internal/repository"
 
 	"github.com/go-chi/chi/v5"
@@ -87,6 +88,18 @@ func (h *CommentHandler) ApproveComment(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	commentInfo, err := h.Queries.GetCommentWithPostAuthor(r.Context(), int32(id))
+	if err != nil {
+		http.Error(w, "comentário não encontrado", http.StatusNotFound)
+		return
+	}
+
+	userID := r.Context().Value(customMiddleware.UserIDKey).(int32)
+	if userID != commentInfo.PostAuthorID {
+		http.Error(w, "você não pode moderar comentários de posts que não são seus", http.StatusForbidden)
+		return
+	}
+
 	comment, err := h.Queries.ApproveComment(r.Context(), int32(id))
 	if err != nil {
 		http.Error(w, "erro ao aprovar comentário", http.StatusInternalServerError)
@@ -104,6 +117,18 @@ func (h *CommentHandler) DeleteComment(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		http.Error(w, "id inválido", http.StatusBadRequest)
+		return
+	}
+
+	commentInfo, err := h.Queries.GetCommentWithPostAuthor(r.Context(), int32(id))
+	if err != nil {
+		http.Error(w, "comentário não encontrado", http.StatusNotFound)
+		return
+	}
+
+	userID := r.Context().Value(customMiddleware.UserIDKey).(int32)
+	if userID != commentInfo.PostAuthorID {
+		http.Error(w, "você não pode excluir comentários de posts que não são seus", http.StatusForbidden)
 		return
 	}
 
